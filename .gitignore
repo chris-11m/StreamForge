@@ -1,7 +1,27 @@
-*.exe
+# CMake build output
+build/
+out/
+CMakeFiles/
+CMakeCache.txt
+
+# Visual Studio
+.vs/
+*.user
+*.suo
 *.obj
 *.pdb
 *.ilk
-*.idb
-.vs/
-build/
+*.exe
+
+# Python (for our upcoming FastAPI backend)
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+src/sensor_pipeline_backup.cpp
+src/sensor_pipeline_backup.cpp

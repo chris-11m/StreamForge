@@ -1,5 +1,6 @@
 #include <iostream>
 #include "SensorProcessor.h"
+#include "streamforge/bounded_queue.hpp"
 #include <cassert>
 #include <thread>
 #include <chrono>
@@ -8,52 +9,61 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
+#include <syncstream>
+#include "streamforge/sensor_simulator.hpp"
+#include "streamforge/anomaly_detector.hpp"
+#include "streamforge/event_json.hpp"
 
-void produceEvents(std::queue<SensorEvent>& event_queue, std::mutex& queue_mutex) {
-    for (int i = 0; i < 10; i++) {
-        SensorEvent event{
-            1000 + static_cast<std::uint64_t>(i),
-            1,
-            20.0f + (i % 10),
-            101.0f,
-            0.02f
-        };
+void produceEvents(streamforge::BoundedQueue<streamforge::SensorEvent>& event_queue) {
 
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex);
-            event_queue.push(event);
-        } // Unlock here
+    streamforge::SensorSimulator simulator(1);
+
+    for (int i = 0; i < 1000; ++i) {
+
+        auto event = simulator.generateEvent(
+            1000 + static_cast<std::uint64_t>(i)
+        );
+
+        if (!event_queue.push(event)) {
+            break;
+        }
     }
+
+    event_queue.close();
 }
 
+
+
 void consumeEvents(
-    std::queue<SensorEvent>& event_queue,
-    SensorProcessor& processor,
-    std::mutex& queue_mutex,
-    std::condition_variable& queue_cv,
-    const bool& producer_finished
+    streamforge::BoundedQueue<streamforge::SensorEvent>& event_queue,
+    SensorProcessor& processor
 ) {
-    while (true) {
-        SensorEvent event;
+    streamforge::SensorEvent event;
+    streamforge::AnomalyDetector detector;
 
-        {
-            //std::lock_guard<std::mutex> lock(queue_mutex);
-            std::unique_lock<std::mutex> lock(queue_mutex);
+    std::size_t anomaly_count = 0;
+    std::size_t event_count = 0;
 
-            queue_cv.wait(lock, [&] {
-                return !event_queue.empty() || producer_finished;
-            });
-
-            if (event_queue.empty()) {
-                break;
-            }
-
-            event = event_queue.front();
-            event_queue.pop();
-        } // Mutex unlocks here
-
+    while (event_queue.pop(event)) {
         processor.addEvent(event);
+
+        bool anomaly = detector.isAnomaly(event);
+
+        if (anomaly) {
+            ++anomaly_count;
+        }
+
+        // Print the first 5 events as JSON.
+        if (event_count < 5) {
+            std::cout << streamforge::eventToJson(event, anomaly)
+                      << '\n';
+        }
+
+        ++event_count;
     }
+
+    std::cout << "Detected anomalies: "
+              << anomaly_count << '\n';
 }
 
 
@@ -93,7 +103,7 @@ int main() {
         for (int i = 0; i < 10; i++) {
             float temperature = 20.0f + i;
 
-            SensorEvent event{
+            streamforge::SensorEvent event{
                 1000 + static_cast<std::uint64_t>(i),
                 1,
                 temperature,
@@ -118,7 +128,7 @@ int main() {
         for (int i = 0; i < total_events; i++) {
                     float temperature = 20.0f + i%10;
 
-                    SensorEvent event{
+                    streamforge::SensorEvent event{
                         1000 + static_cast<std::uint64_t>(i),
                         1,
                         temperature,
@@ -150,29 +160,83 @@ int main() {
                 << events_per_second
                 << " events/second\n";
         std::cout << "Average temp from all readings " << benchmark_processor.getAverageTemp() << "\n";
- /////////////////////////////////////////////////////////
 
-        std::queue<SensorEvent> event_queue;
-        std::mutex queue_mutex;
+
+        /////////////////////////////
+
+        
+        // Create a bounded queue with capacity 10.
+        constexpr std::size_t max_queue_size = 10;
+
+        streamforge::BoundedQueue<streamforge::SensorEvent>
+            event_queue(max_queue_size);
+
         SensorProcessor queue_processor(2);
 
+        // Start measuring the pipeline.
+        auto pipeline_start = std::chrono::steady_clock::now();
+
+        // Start producer and consumer threads.
         std::thread producer_thread(
             produceEvents,
-            std::ref(event_queue),
-            std::ref(queue_mutex)
+            std::ref(event_queue)
         );
-        // Wait for producer to finish
+
+        std::thread consumer_thread(
+            consumeEvents,
+            std::ref(event_queue),
+            std::ref(queue_processor)
+        );
+
+        // Wait for both threads to finish.
         producer_thread.join();
-        // Process all events
-        consumeEvents(event_queue, queue_processor, queue_mutex);
+        consumer_thread.join();
+
+        // Stop measuring the pipeline.
+        auto pipeline_end = std::chrono::steady_clock::now();
+
+        double pipeline_seconds =
+            std::chrono::duration<double>(
+                pipeline_end - pipeline_start
+            ).count();
+
+        double pipeline_throughput = 1000.0 / pipeline_seconds;
+
+        std::cout << "Pipeline runtime: "
+                  << pipeline_seconds << " seconds\n";
+
+        std::cout << "Pipeline throughput: "
+                  << pipeline_throughput << " events/second\n";
 
         std::cout << "Overall average: "
-          << queue_processor.getAverageTemp() << "\n";
+                  << queue_processor.getAverageTemp() << "\n";
 
         std::cout << "Rolling average: "
-            << queue_processor.getRollingAverage() << "\n";
+                  << queue_processor.getRollingAverage() << "\n";
+
         
-        std::cout << "Events remaining: " << event_queue.size() <<"\n";
+        std::cout << "Peak queue size: "
+                << event_queue.peakQueueSize() << "\n";
+
+        std::cout << "Producer waits: "
+                << event_queue.producerWaitCount() << "\n";
+
+        std::cout << "Total producer wait time: "
+                << std::chrono::duration_cast<std::chrono::milliseconds>(
+                        event_queue.producerWaitTime()
+                    ).count()
+                << " ms\n";
+        
+        std::cout << "Total producer wait time: "
+          << std::chrono::duration<double, std::micro>(
+                 event_queue.producerWaitTime()
+             ).count()
+          << " microseconds\n";
+        
+        
+
+
+      
 
     }
     catch (const std::invalid_argument& error) {

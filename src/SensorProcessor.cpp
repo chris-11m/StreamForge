@@ -1,4 +1,5 @@
 #include "SensorProcessor.h"
+#include <streamforge/sensor_event.hpp>
 #include <stdexcept>
 
 
@@ -20,7 +21,7 @@ void SensorProcessor::addRecentTemperature(float temperature) {
     }
 }
 
-void SensorProcessor::addEvent(const SensorEvent& event) {
+void SensorProcessor::addEvent(const streamforge::SensorEvent& event) {
     if (event_count == 0) {
         min_temperature = event.temperature;
         max_temperature = event.temperature;
@@ -68,14 +69,14 @@ float SensorProcessor::getMinTemp() const{
     return min_temperature;
 }
 
-float SensorProcessor::calculateAverageTemp(const std::vector<SensorEvent>& events) const {
+float SensorProcessor::calculateAverageTemp(const std::vector<streamforge::SensorEvent>& events) const {
     if (events.empty()) {
         return 0.0f;
     }
 
     float sum = 0.0f;
 
-    for (const SensorEvent& event : events) {
+    for (const streamforge::SensorEvent& event : events) {
         sum += event.temperature;
     }
 
@@ -83,13 +84,13 @@ float SensorProcessor::calculateAverageTemp(const std::vector<SensorEvent>& even
 }
 
 float SensorProcessor::calculateMaxTemp(
-    const std::vector<SensorEvent>& events
+    const std::vector<streamforge::SensorEvent>& events
 ) const {
     if (events.empty()) return 0.0f;
 
     float max_temp = events[0].temperature;
 
-    for (const SensorEvent& event : events) {
+    for (const streamforge::SensorEvent& event : events) {
         if (event.temperature > max_temp) max_temp = event.temperature;
 
     }
@@ -98,13 +99,13 @@ float SensorProcessor::calculateMaxTemp(
 }
 
 float SensorProcessor::calculateMinTemp(
-    const std::vector<SensorEvent>& events
+    const std::vector<streamforge::SensorEvent>& events
 ) const {
     if (events.empty()) return 0.0f;
 
     float min_temp = events[0].temperature;
 
-    for (const SensorEvent& event : events) {
+    for (const streamforge::SensorEvent& event : events) {
         if (event.temperature < min_temp) min_temp = event.temperature;
 
     }

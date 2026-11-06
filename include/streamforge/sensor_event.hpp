@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+namespace streamforge {
+
 struct SensorEvent {
     std::uint64_t timestamp;
     std::uint32_t sensor_id;
@@ -9,3 +11,5 @@ struct SensorEvent {
     float pressure;
     float vibration;
 };
+
+} // namespace streamforge

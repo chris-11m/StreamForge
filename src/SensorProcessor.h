@@ -1,6 +1,7 @@
 #pragma once
 
-#include "SensorEvent.h"
+//#include "SensorEvent.h"
+#include <streamforge/sensor_event.hpp>
 #include <vector>
 #include <deque>
 #include <cstddef>
@@ -22,15 +23,15 @@ private:
 public:
     explicit SensorProcessor(std::size_t size = 3);
 
-    void addEvent(const SensorEvent& event);
+    void addEvent(const streamforge::SensorEvent& event);
 
     float getRollingAverage() const;
     float getAverageTemp() const;
     float getMaxTemp() const;
     float getMinTemp() const;
 
-    float calculateAverageTemp(const std::vector<SensorEvent>& events) const;
-    float calculateMaxTemp(const std::vector<SensorEvent>& events) const;
-    float calculateMinTemp(const std::vector<SensorEvent>& events) const;
+    float calculateAverageTemp(const std::vector<streamforge::SensorEvent>& events) const;
+    float calculateMaxTemp(const std::vector<streamforge::SensorEvent>& events) const;
+    float calculateMinTemp(const std::vector<streamforge::SensorEvent>& events) const;
     
 };
